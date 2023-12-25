@@ -13,6 +13,9 @@ Neste exemplo, é possível observar a utilização do ``TFdRTDao<TColaborador>`
 
 ```pascal
 
+uses
+  uRepo;
+
 type
 
   [TDbTable('public.colaborador')]
