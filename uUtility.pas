@@ -31,6 +31,7 @@ type
       class function ConvertBooleanToStr(const bool: Boolean): String;
       class function GetFieldList(var field: TField) : TArray<Variant>;
       class function CheckStrInArray(const str: String; values: Array of String): Boolean;
+      class function CreateParam(fieldName: String): String;
   end;
 
 implementation
@@ -107,6 +108,13 @@ begin
   else
     Result := 'false';
 end;
+
+class function TMiscUtil.CreateParam(fieldName: String): String;
+begin
+  Result := Format('param%s', [fieldName]);
+end;
+
+
 
 
 end.

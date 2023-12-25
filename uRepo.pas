@@ -47,10 +47,15 @@ type
   }
   IDAORepository<E: class> = interface
     function Insert(entity: E): Boolean;
-    procedure Delete(const fieldName: String; value: Variant);
+
+    [TDeprecated] procedure Delete(const fieldName: String; value: Variant);
     procedure DeleteWhere(SqlFilter: TSQLFilterBuilder);
-    procedure Update(const fieldName: String; value: Variant; changes: TDictionary<String, Variant>);
-    
+
+    [TDeprecated] procedure Update(const fieldName: String; value: Variant; changes: TDictionary<String, Variant>);
+
+    procedure UpdateWhere(var sqlFilter: TSQLFilterBuilder; var changes: TDictionary<String, Variant>;
+                          var parameters: TDictionary<String, Variant>);
+
     function Find(value: Variant; const fieldName: String; out entities: TList<E>): Boolean;
     function FindUnique(value: Variant; const fieldName: String; out entity: E): Boolean;
     function FindAll(out entities: TList<E>): Boolean;
@@ -88,12 +93,14 @@ type
       procedure Delete(const fieldName: String; value: Variant); virtual; abstract;
       procedure DeleteWhere(SqlFilter: TSQLFilterBuilder); virtual; abstract;
       procedure Update(const fieldName: String; value: Variant; changes: TDictionary<String, Variant>); virtual; abstract;
-     
+
+      procedure UpdateWhere(var sqlFilter: TSQLFilterBuilder; var changes: TDictionary<String, Variant>;
+                            var parameters: TDictionary<String, Variant>); virtual; abstract;
+
       function Find(value: Variant; const fieldName: String; out entities: TList<E>): Boolean; virtual; abstract;
       function FindUnique(value: Variant; const fieldName: String; out entity: E): Boolean; virtual; abstract;
       function FindAll(out entities: TList<E>): Boolean; virtual; abstract;
 
-      function CreateParam(fieldName: String): String;
       property ErrorHandler : IDbErrorHandler read fErrorHandler write fErrorHandler;
 
   end;
@@ -110,8 +117,8 @@ type
   TFdRTDao<E: class> = class (TFDDAOBase<E>)
     private
       function InternalRTTIInsert(entity: E; var fdQuery: TFDQuery): Boolean;
-      procedure InternalRTTIUpdate(const fieldName: String; value: Variant;
-                                   changes: TDictionary<String, Variant>; var fdQuery: TFDQuery);
+      procedure InternalRTTIUpdate(var sqlFilter: TSQLFilterBuilder; changes: TDictionary<String, Variant>;
+                                   var parameters: TDictionary<String, Variant>; var fdQuery: TFDQuery);
 
       procedure InternalRTTIDelete(sqlFilter: TSQLFilterBuilder; var fdQuery: TFDQuery);
 
@@ -140,6 +147,11 @@ type
       procedure Delete(const fieldName: String; value: Variant); virtual;
       procedure DeleteWhere(SqlFilter: TSQLFilterBuilder); virtual;
       procedure Update(const fieldName: String; value: Variant; changes: TDictionary<String, Variant>); virtual;
+
+      procedure UpdateWhere(var sqlFilter: TSQLFilterBuilder; var changes: TDictionary<String, Variant>;
+                            var parameters: TDictionary<String, Variant>); virtual;
+
+
 
       function Find(value: Variant; const fieldName: String; out entities: TList<E>): Boolean; virtual;
       function FindUnique(value: Variant; const fieldName: String; out entity: E): Boolean; virtual;
@@ -181,6 +193,8 @@ type
       {TODO}
   end;
 
+  TDeprecated = class(TCustomAttribute) end;
+
 implementation
 
 
@@ -211,9 +225,33 @@ end;
 procedure TFdRTDao<E>.Update(const fieldName: String; value: Variant; changes: TDictionary<String, Variant>);
 var
   FdQuery : TFDQuery;
+  SqlFilter : TSQLFilterBuilder;
+  Parameters : TDictionary<String, Variant>;
+  ParamFieldName : String;
+begin
+  SqlFilter := TSQLFilterBuilder.Create;
+  Parameters := TDictionary<String, Variant>.Create;
+  try
+    ParamFieldName := TMiscUtil.CreateParam(fieldName);
+    Parameters.Add(ParamFieldName, value);
+    SqlFilter.Add(fieldName, Concat(':', ParamFieldName));
+    InternalRTTIUpdate(SqlFilter, changes, Parameters, FdQuery);
+  finally
+    FdQuery.Free;
+    SqlFilter.Free;
+    Parameters.Free;
+  end;
+end;
+
+{TODO: DESC detalhada }
+procedure TFdRTDao<E>.UpdateWhere(var sqlFilter: TSQLFilterBuilder; var changes: TDictionary<String, Variant>;
+                                  var parameters: TDictionary<String, Variant>);
+
+var
+  FdQuery : TFDQuery;
 begin
   try
-    InternalRTTIUpdate(fieldName, value, changes, FdQuery);
+    InternalRTTIUpdate(SqlFilter, changes, parameters, FdQuery);
   finally
     FdQuery.Free;
   end;
@@ -339,28 +377,20 @@ end;
              acordo com os valores passados no dicionário. Cria um UPDATE dinâmico
              e executando a query no banco de dados;
 
-  fieldName : Nome da coluna quer será usada para filtrar a entidade no WHERE;
-  value     : Valor que a coluna deve ter para que a atualização ocorra;
+  sqlFiltr  : Builder do filtro SQL que será utilizado para a atualização;
   changes   : Mapa com as informações que serão atualizadas no banco de dados;
   fdQuery   : TFDQuery utilizado na pesquisa;
 }
-procedure TFdRTDao<E>.InternalRTTIUpdate(const fieldName: String; value: Variant;
-                                         changes: TDictionary<String, Variant>; var fdQuery: TFDQuery);
+procedure TFdRTDao<E>.InternalRTTIUpdate(var sqlFilter: TSQLFilterBuilder; changes: TDictionary<String, Variant>;
+                                         var parameters: TDictionary<String, Variant>; var fdQuery: TFDQuery);
 var
   SqlText : String;
-  SqlFilter : TSQLFilterBuilder;
 begin
-  SqlFilter := TSQLFilterBuilder.Create;
-  try
-    SqlFilter.Add(fieldName, value);
+  SqlText := TRtSQLEntityBuilder
+    .CreateUpdate(TypeInfo(E), SqlFilter, changes);
 
-    SqlText := TRtSQLEntityBuilder
-      .CreateUpdate(TypeInfo(E), SqlFilter, changes);
-
-    DaoQuery(SqlText, fdQuery, nil, True);
-  finally
-    SqlFilter.Free;
-  end;
+  writeln(sqlText);
+  DaoQuery(SqlText, fdQuery, parameters, True);
 end;
 
 {
@@ -402,12 +432,12 @@ var
 begin
 
   Parameters := TDictionary<String, Variant>.Create;
-  ParamFieldName := CreateParam(fieldName);
-  Parameters.Add(ParamFieldName.Substring(1), value);
+  ParamFieldName := TMiscUtil.CreateParam(fieldName);
+  Parameters.Add(ParamFieldName, value);
 
   try
     SqlFilter := TSQLFilterBuilder.Create
-      .Add(fieldName, ParamFieldName);
+      .Add(fieldName, Concat(':', ParamFieldName));
 
     SqlText := TRtSQLEntityBuilder
       .CreateSelect(TypeInfo(E), [], SqlFilter);
@@ -653,11 +683,11 @@ begin
   fdQuery.FetchOptions.Mode := fmAll;
   fdQuery.SQL.Text := sqlText;
 
-  if (parameters <> nil) and (parameters.Count > 0) then
-  begin
+  if (parameters <> nil) then
     for var pair in parameters do
+    begin
       fdQuery.ParamByName(pair.Key).Value := pair.Value;
-  end;
+    end;
 
   MonitorQuery(Self, fdQuery);
 
@@ -725,12 +755,6 @@ begin
     end;
   end;
 end;
-
-function TFDDAOBase<E>.CreateParam(fieldName: String): String;
-begin
-  Result := Format(':param%s', [fieldName]);
-end;
-
 
 constructor TQueryManager.Create();
 begin

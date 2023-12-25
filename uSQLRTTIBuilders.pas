@@ -22,6 +22,7 @@ uses
   uUtility,
   TypInfo,
   SysUtils,
+  StrUtils,
   System.JSON,
   System.Classes,
   System.Variants,
@@ -43,6 +44,7 @@ type
       destructor Destroy;
 
       function Add(colunmName: String; value: Variant): TSQLFilterBuilder;
+      function AddParameterized(colunmName: String): TSQLFilterBuilder;
       function SqlAnd(): TSQLFilterBuilder;
       function SqlOr(): TSQLFilterBuilder;
 
@@ -155,7 +157,7 @@ begin
   SetList := TStringList.Create;
 
   for var ChangePair in changes do
-      SetList.Add(Format('%s=''%s''', [ChangePair.Key, ChangePair.Value]));
+    SetList.Add(Format('%s = ''%s''', [ChangePair.Key, ChangePair.Value]));
 
   if String.IsNullOrWhitespace(SetList.Text) then
     raise TDAOException.Create('Não há mudanças a serem feitas! Verifique.');
@@ -254,6 +256,12 @@ end;
 function TSQLFilterBuilder.Add(colunmName: String; value: Variant): TSQLFilterBuilder;
 begin
   Filter.Append(Format('%s = %s', [colunmName, VarToStr(value)]));
+  Result := Self;
+end;
+
+function TSQLFilterBuilder.AddParameterized(colunmName: String): TSQLFilterBuilder;
+begin
+  Filter.Append(Format('%s = %s', [colunmName, Concat(':', TMiscUtil.CreateParam(colunmName)) ]));
   Result := Self;
 end;
 
