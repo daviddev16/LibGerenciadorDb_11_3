@@ -3,6 +3,10 @@
 LibGerenciadorDb é uma biblioteca que desenvolvi especialmente para facilitar as operações de Insert, Delete, Update e Select no banco de dados PostgreSQL. 
 Também fornece mapeamento de DataSet em objetos da linguagem, fazendo com que seja possível interagir com o banco de dados rapidamente e criar DAOs com facilidade.
 
+## IMPORTANTE
+
+Devido a limitações na arquitetura do projeto, esse será descontinuado. Vou refazer do zero, mais robusto e com interação mais ampla e eficaz com o banco de dados.
+
 ## Aviso
 
 Essa biblioteca ainda está em desenvolvimento. É utilizada em alguns projetos que estou fazendo, sendo assim, é possível que haja bugs ou algumas implementações faltando.
