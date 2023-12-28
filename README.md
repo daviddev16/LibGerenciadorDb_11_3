@@ -6,6 +6,8 @@ Também fornece mapeamento de DataSet em objetos da linguagem, fazendo com que s
 ## IMPORTANTE
 
 Devido a limitações na arquitetura do projeto, esse será descontinuado. Vou refazer do zero, mais robusto e com interação mais ampla e eficaz com o banco de dados.
+Um dos grandes problemas dessa versão é que, alguns SQL que são gerados dinamicamente, não utilizam prepared statement, deixando a aplicação vulnerável a SQL injection
+e erros de execução.
 
 ## Aviso
 
