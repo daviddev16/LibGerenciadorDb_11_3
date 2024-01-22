@@ -40,6 +40,7 @@ contains
   uSQLRTTIBuilders in 'uSQLRTTIBuilders.pas',
   uSQLAttr in 'uSQLAttr.pas',
   uUtility in 'uUtility.pas',
-  uConexao in 'uConexao.pas';
+  uConexao in 'uConexao.pas',
+  uSQLContextBuilders in 'uSQLContextBuilders.pas';
 
 end.

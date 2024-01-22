@@ -21,25 +21,44 @@ uses
 
 type
   TFdDbConn = class
-    const REGKEY_PATH = '\SOFTWARE\WOW6432Node\ControleFerias\Conexao';
+    const REGKEY_PATH = 'SOFTWARE\ControleFerias\Conexao';
 
     private
       fHost : String;
       fDatabaseName : String;
 
-      procedure SetDatabase(const database: String);
-      procedure SetHost(const host: String);
-
     public
-      property Host : String read fHost;
-      property Database : String read fDatabaseName;
+      property Host : String read fHost write fHost;
+      property Database : String read fDatabaseName write fDatabaseName;
 
       class function CarregarConexao(out fdDbConn: TFdDbConn): Boolean;
       class procedure SalvarConexao(fdDbConn: TfdDbConn);
+      class function ExisteConfiguracao(): Boolean;
 
   end;
 
 implementation
+
+class function TFdDbConn.ExisteConfiguracao(): Boolean;
+var
+  Registry : TRegistry;
+begin
+  try
+    try
+      Registry := TRegistry.Create(KEY_ALL_ACCESS);
+      with Registry do
+      begin
+        Registry.RootKey := HKEY_CURRENT_USER;
+        Result := Registry.KeyExists(REGKEY_PATH);
+        CloseKey;
+      end;
+    except
+      Result := False;
+    end;
+  finally
+    Registry.Free;
+  end;
+end;
 
 class procedure TFdDbConn.SalvarConexao(fdDbConn: TfdDbConn);
 var
@@ -50,18 +69,19 @@ begin
       Registry := TRegistry.Create(KEY_ALL_ACCESS);
       with Registry do
       begin
-        RootKey := HKEY_LOCAL_MACHINE;
+        RootKey := HKEY_CURRENT_USER;
         if OpenKey(REGKEY_PATH, True) then
         begin
           WriteString('Host', fdDbConn.Host);
           WriteString('Database', fdDbConn.Database);
+          CloseKey;
         end;
       end;
     except
       on E: Exception do
       begin
         raise Exception.Create(Format('Não foi possível salvar o ' +
-          'registro %s/%s. Verifique as permissões. [%s]', ['HKLM', REGKEY_PATH]));
+          'registro %s/%s. Verifique as permissões. [%s]', ['HKLM', REGKEY_PATH, e.Message]));
       end;
     end;
   finally
@@ -78,12 +98,14 @@ begin
       Registry := TRegistry.Create(KEY_ALL_ACCESS);
       with Registry do
       begin
-        RootKey := HKEY_LOCAL_MACHINE;
-        if OpenKey(REGKEY_PATH, True) then
+        RootKey := HKEY_CURRENT_USER;
+        if OpenKeyReadOnly(REGKEY_PATH) then
         begin
           fdDbConn := TFdDbConn.Create;
-          fdDbConn.SetHost(ReadString('Host'));
-          fdDbConn.SetDatabase(ReadString('Database'));
+          fdDbConn.Host := ReadString('Host');
+          fdDbConn.Database := ReadString('Database');
+          Result := True;
+          CloseKey;
         end;
       end;
     except
@@ -91,21 +113,12 @@ begin
       begin
         raise Exception.Create(Format('Não foi possível ler o ' +
           'registro %s/%s. Verifique as permissões. [%s]', ['HKLM', REGKEY_PATH]));
+        Result := False;
       end;
     end;
   finally
     Registry.Free;
   end;
-end;
-
-procedure TFdDbConn.SetDatabase(const database: String);
-begin
-  fDatabaseName := database;
-end;
-
-procedure TFdDbConn.SetHost(const host: String);
-begin
-  fHost := host;
 end;
 
 end.

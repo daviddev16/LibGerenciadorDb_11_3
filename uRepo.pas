@@ -30,7 +30,8 @@ uses
   System.Generics.Defaults,
   FireDAC.Comp.Client,
   FireDAC.Stan.Error,
-  FireDAC.Stan.Option;
+  FireDAC.Stan.Option,
+  Vcl.Dialogs;
 
 type
 
@@ -275,7 +276,7 @@ begin
     entities := InternalRTTIFind(value, fieldName, FdQuery, False);
     Result := True;
   finally
-    fdQuery := nil;
+    FdQuery.Free;
   end;
 end;
 
@@ -301,7 +302,7 @@ begin
       Result := True;
     end;
   finally
-    FdQuery := nil;
+    FdQuery.Free;
   end;
 end;
 
@@ -315,9 +316,14 @@ var
   FdQuery : TFDQuery;
 begin
   try
-    entities := InternalRTTIFindAll(FdQuery);
+    try
+      Result := True;
+      entities := InternalRTTIFindAll(FdQuery);
+    except
+      Result := False;
+    end;
   finally
-    FdQuery := nil;
+    FdQuery.Free;
   end;
 end;
 
@@ -389,7 +395,6 @@ begin
   SqlText := TRtSQLEntityBuilder
     .CreateUpdate(TypeInfo(E), SqlFilter, changes);
 
-  writeln(sqlText);
   DaoQuery(SqlText, fdQuery, parameters, True);
 end;
 
@@ -485,7 +490,7 @@ begin
       Result := entity <> nil;
     end;
   finally
-    FdQuery := nil;
+    FdQuery.Free;
   end;
 end;
 
@@ -500,6 +505,7 @@ begin
     InternalRTTIQuery(SqlText, parameters, entities, False, fdConnection, FdQuery);
   finally
     Result := Assigned(entities) and (entities.Count > 0);
+    FdQuery.Free;
   end;
 end;
 
@@ -632,31 +638,35 @@ end;
 }
 class procedure TFdRTDao<E>.ConvertDataSetField(var entityInstance: TObject; var datasetField: TField;
                                                 entityField: TRttiField);
+var
+  VariantValue : Variant;
 begin
   if not datasetField.IsNull then
   begin
+    VariantValue := datasetField.AsVariant;
     case datasetField.DataType of
       ftInteger:
-        entityField.SetValue(entityInstance, datasetField.AsInteger);
+        entityField.SetValue(entityInstance, TValue.FromVariant(VariantValue).AsInteger);
       ftFloat:
-        entityField.SetValue(entityInstance, datasetField.AsFloat);
+        entityField.SetValue(entityInstance, TValue.FromVariant(VariantValue).AsType<Double>());
       ftString:
-        entityField.SetValue(entityInstance, datasetField.AsString);
+        entityField.SetValue(entityInstance, TValue.FromVariant(VariantValue).AsString);
       ftBoolean:
-        entityField.SetValue(entityInstance, datasetField.AsBoolean);
+        entityField.SetValue(entityInstance, TValue.FromVariant(VariantValue).AsBoolean);
       ftWideString:
-        entityField.SetValue(entityInstance, datasetField.AsWideString);
-      ftTimeStamp, ftTime, ftTimeStampOffset, ftDateTime, ftDate:
-        entityField.SetValue(entityInstance, datasetField.AsDateTime);
+        entityField.SetValue(entityInstance, WideString(TValue.FromVariant(VariantValue).AsString));
+      ftTimeStamp, ftTimeStampOffset:
+        entityField.SetValue(entityInstance, VarToDateTime(VariantValue));
+      ftTime, ftDateTime, ftDate:
+        entityField.SetValue(entityInstance, TValue.FromVariant(VariantValue).AsType<TDateTime>());
       ftMemo:
-        entityField.SetValue(entityInstance, datasetField.AsString);
+        entityField.SetValue(entityInstance, TValue.FromVariant(VariantValue).AsString);
       ftWideMemo:
-        entityField.SetValue(entityInstance, datasetField.AsWideString);
+        entityField.SetValue(entityInstance, WideString(TValue.FromVariant(VariantValue).AsString));
       ftUnknown:
         entityField.SetValue(entityInstance, VarToStr(datasetField.AsVariant));
       ftVariant:
         entityField.SetValue(entityInstance, VarToStr(datasetField.AsVariant));
-       { TODO: fazer conversão para outros tipos de dados }
     end;
   end;
 
@@ -702,7 +712,7 @@ begin
   except
     on E: Exception do
     begin
-      Writeln('[SQL_ERROR]: ' + E.Message);
+      {Writeln('[SQL_ERROR]: ' + E.Message);}
       raise;
     end;
   end;
@@ -717,13 +727,14 @@ var
 begin
   JSON := TJSONObject.Create;
   JSONArray := TJSONArray.Create;
-  WriteLn('SQL   : ' + fdQuery.SQL.Text);
+  {WriteLn('SQL   : ' + fdQuery.SQL.Text);}
   for I := 0 to fdQuery.Params.Count - 1 do
   begin
     JSONArray.Add(TJSONObject.Create
       .AddPair(fdQuery.Params[I].Name, VarToStr(fdQuery.Params[I].Value)));
   end;
-  Writeln('Params: ' + JSONArray.ToString + sLineBreak);
+  { Substituir por uma janela de debug }
+  {Writeln('Params: ' + JSONArray.ToString + sLineBreak);}
   JSON.Free;
 end;
 
@@ -749,9 +760,10 @@ begin
   except
     on DbException: EFDDBEngineException do
     begin
-      Result := False;
       if Assigned(ErrorHandler) then
         ErrorHandler.HandleException(DbException);
+      
+      Result := False;
     end;
   end;
 end;
